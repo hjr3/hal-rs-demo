@@ -6,12 +6,27 @@ extern crate serialize;
 use http::headers::content_type::MediaType;
 use std::io::net::ip::Ipv4Addr;
 use nickel::{ Nickel, Request, Response, HttpRouter };
-use hal::{ Link, Resource, ToHalState };
+use hal::{ Link, Resource, ToHalState, ToHal };
 use serialize::json::ToJson;
+
+struct Order {
+    total: f64,
+    currency: String,
+    status: String
+}
+
+impl ToHal for Order {
+    fn to_hal(&self) -> Resource {
+        Resource::with_self("https://www.example.com/orders/1")
+            .add_state("total", self.total.to_hal_state())
+            .add_state("currency", self.currency.to_hal_state())
+            .add_state("status", self.status.to_hal_state())
+    }
+}
 
 fn main() {
      
-    fn a_handler (_request: &Request, response: &mut Response) { 
+    fn index_handler (_request: &Request, response: &mut Response) { 
         let orders = Resource::with_self("/orders")
             .add_curie("ea", "http://example.com/docs/rels/{rel}")
             .add_link("next", Link::new("/orders?page=2"))
@@ -37,15 +52,33 @@ fn main() {
                     .add_state("status", "processing".to_hal_state())
             );    
 
+        let results = orders.to_json();
+        response
+            .content_type("json")
+            .send(format!("{}", results)); 
+    }
+
+    fn order_handler (_request: &Request, response: &mut Response) { 
+        let order = Order { total: 20.00 as f64,
+        currency: String::from_str("USD"),
+        status:
+            String::from_str("processing")
+        };
+
         response.origin.headers.content_type = Some(MediaType {
                 type_: "application".to_string(),
                 subtype: "json".to_string(),
                 parameters: Vec::new()
         });
-        response.send(orders.to_json().to_pretty_str().as_slice());
+
+        let result = order.to_hal().to_json();
+        response
+            .content_type("json")
+            .send(format!("{}", result)); 
     }
 
     let mut server = Nickel::new();
-    server.get("/", a_handler);
+    server.get("/", index_handler);
+    server.get("/orders/123", order_handler);
     server.listen(Ipv4Addr(127, 0, 0, 1), 6767);
 }
