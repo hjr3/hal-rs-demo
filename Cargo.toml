@@ -1,0 +1,22 @@
+[package]
+
+name = "hal-demo"
+version = "0.1.0"
+authors = [ "Herman J. Radtke III <herman@hermanradtke.com>" ]
+
+[[bin]]
+
+name = "hal-demo"
+path = "src/main.rs"
+
+[dependencies.nickel]
+
+git = "https://github.com/nickel-org/nickel.rs.git"
+
+[dependencies.hal-rs]
+
+git = "https://github.com/hjr3/hal-rs.git"
+
+[dependencies.postgres]
+
+git = "https://github.com/sfackler/rust-postgres.git"
