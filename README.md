@@ -2,6 +2,8 @@
 
 A demonstration of how to use the hal-rs library in a web server.
 
+[![Build Status](https://travis-ci.org/hjr3/hal-rs-demo.svg)](https://travis-ci.org/hjr3/hal-rs-demo)
+
 ## Instructions
 
 ```
