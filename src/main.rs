@@ -9,6 +9,7 @@ use nickel::{ Nickel, Request, Response, HttpRouter };
 use hal::{ Link, Resource, ToHalState, ToHal };
 use serialize::json::ToJson;
 use postgres::{Connection, NoSsl};
+use std::os;
 
 struct Order {
     total: f64,
@@ -25,11 +26,25 @@ impl ToHal for Order {
     }
 }
 
-fn main() {
-
-    fn connect() -> Connection {
-        Connection::connect("postgres://myapp:dbpass@localhost:15432/myapp", &NoSsl).unwrap()
+fn get_option(key: &str, default: &str) -> String {
+    match os::getenv(key) {
+        Some(val) => val,
+        None => String::from_str(default)
     }
+}
+
+fn connect() -> Connection {
+    let host = get_option("DBHOST", "localhost");
+    let port = get_option("DBPORT", "15432");
+    let user = get_option("DBUSER", "myapp");
+    let password = get_option("DBPASS", "dbpass");
+    let dbname = get_option("DBNAME", "myapp");
+
+    let dsn = format!("postgres://{}:{}@{}:{}/{}", user, password, host, port, dbname);
+    Connection::connect(dsn.as_slice(), &NoSsl).unwrap()
+}
+
+fn main() {
      
     fn index_handler (_request: &Request, response: &mut Response) { 
         let orders = Resource::with_self("/orders")
@@ -120,7 +135,6 @@ fn main() {
                        &String::from_str("USD"),
                        &String::from_str("shipping")
                       ]).unwrap();
-
 
         response.send("Setup complete");
     }

@@ -13,9 +13,21 @@ $ cargo build
 $ cargo run
 ```
 
-The postgres database server credentials are hard-coded at the moment.
+The demo requires a postgres database server. The postgres database server
+credentials can be customized using the following environment variable:
+
+   * DBHOST
+   * DBPORT
+   * DBUSER
+   * DBPASS
+   * DBNAME
 
 ## Setup
+
+There is fixture data that will setup the database and allow the requests to
+work. Please make sure the database user is allowed to create and drop tables.
+
+The setup assumes the database is already created.
 
 Browse to http://localhost:6767/setup and you should see "Setup complete".
 
