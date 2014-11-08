@@ -1,9 +1,12 @@
+#![feature(phase)]
+
 extern crate http;
 extern crate nickel;
 extern crate hal;
 extern crate serialize;
 extern crate postgres;
 extern crate time;
+#[phase(plugin)] extern crate nickel_macros;
 
 use std::io::net::ip::Ipv4Addr;
 use nickel::{Nickel, Request, Response, HttpRouter, Continue, Halt, MiddlewareResult};
@@ -99,117 +102,111 @@ fn logger(request: &Request, _response: &mut Response) -> MiddlewareResult {
 
 fn main() {
 
-    fn index_handler (_request: &Request, response: &mut Response) { 
-        let orders = Resource::with_self("/orders")
-            .add_curie("ea", "http://example.com/docs/rels/{rel}")
-            .add_link("next", Link::new("/orders?page=2"))
-            .add_link("ea:find", Link::new("/orders{?id}").templated(true))
-            .add_link("ea:admin", Link::new("/admins/2").title("Fred"))
-            .add_link("ea:admin", Link::new("/admins/5").title("Kate"))
-            .add_state("currentlyProcessing", (14 as int).to_hal_state())
-            .add_state("shippedToday", (14 as int).to_hal_state())
-            .add_resource("ea:order",
-                Resource::with_self("/orders/123")
-                    .add_link("ea:basket", Link::new("/baskets/98712"))
-                    .add_link("ea:customer", Link::new("/customers/7809"))
-                    .add_state("total", (30.00 as f64).to_hal_state())
-                    .add_state("currency", "USD".to_hal_state())
-                    .add_state("status", "shipped".to_hal_state())
-            )
-            .add_resource("ea:order",
-                Resource::with_self("/orders/124")
-                    .add_link("ea:basket", Link::new("/baskets/97213"))
-                    .add_link("ea:customer", Link::new("/customers/12369"))
-                    .add_state("total", (20.00 as f64).to_hal_state())
-                    .add_state("currency", "USD".to_hal_state())
-                    .add_state("status", "processing".to_hal_state())
-            );    
-
-        let results = orders.to_json();
-        response
-            .content_type(mimes::Hal)
-            .send(format!("{}", results)); 
-    }
-
-    fn order_handler (request: &Request, response: &mut Response) -> MiddlewareResult { 
-        let conn = connect();
-
-        let order_id: i32 = match from_str(request.param("order_id")) {
-            Some(order_id) => order_id,
-            None => return Err(NickelError::new("Invalid order id", ErrorWithStatusCode(BadRequest)))
-        };
-
-        let stmt = conn.prepare("SELECT order_id, total, currency, status
-                                 FROM orders
-                                 WHERE order_id = $1").unwrap();
-
-        let mut rows = match stmt.query(&[&order_id]) {
-            Ok(rows) => rows,
-            Err(err) => panic!("error running query: {}", err)
-        };
-
-        let row = match rows.next() {
-            Some(row) => row,
-            None => return Err(NickelError::new("No such order", ErrorWithStatusCode(NotFound)))
-        };
-
-        let order = Order {
-            order_id: row.get(0),
-            total: row.get(1),
-            currency: row.get(2),
-            status: row.get(3)
-        };
-
-        let result = order.to_hal().to_json();
-        response
-            .content_type(mimes::Hal)
-            .send(format!("{}", result)); 
-
-        Ok(Halt)
-    }
-
-    fn setup_handler (_request: &Request, response: &mut Response) { 
-        let conn = connect();
-
-        conn.execute("DROP TABLE IF EXISTS orders", []).unwrap();
-
-        // todo: implement Numeric support
-        conn.execute("CREATE TABLE orders (
-                        order_id        SERIAL PRIMARY KEY,
-                        total           DOUBLE PRECISION NOT NULL,
-                        currency        VARCHAR NOT NULL,
-                        status          VARCHAR NOT NULL
-                     )", []).unwrap();
-
-        conn.execute("INSERT INTO orders (order_id, total, currency, status)
-                        VALUES ($1, $2, $3, $4)",
-                     &[&123i32,
-                       &20f64,
-                       &String::from_str("USD"),
-                       &String::from_str("processing")
-                      ]).unwrap();
-
-        conn.execute("INSERT INTO orders (order_id, total, currency, status)
-                        VALUES ($1, $2, $3, $4)",
-                     &[&124i32,
-                       &30f64,
-                       &String::from_str("USD"),
-                       &String::from_str("shipping")
-                      ]).unwrap();
-
-        response.send("Setup complete");
-    }
-
     let mut server = Nickel::new();
     server.utilize(logger);
 
-    let mut router = Nickel::router();
+    server.utilize(router! {
+        get "/" => |request, response| {
+            let orders = Resource::with_self("/orders")
+                .add_curie("ea", "http://example.com/docs/rels/{rel}")
+                .add_link("next", Link::new("/orders?page=2"))
+                .add_link("ea:find", Link::new("/orders{?id}").templated(true))
+                .add_link("ea:admin", Link::new("/admins/2").title("Fred"))
+                .add_link("ea:admin", Link::new("/admins/5").title("Kate"))
+                .add_state("currentlyProcessing", (14 as int).to_hal_state())
+                .add_state("shippedToday", (14 as int).to_hal_state())
+                .add_resource("ea:order",
+                    Resource::with_self("/orders/123")
+                        .add_link("ea:basket", Link::new("/baskets/98712"))
+                        .add_link("ea:customer", Link::new("/customers/7809"))
+                        .add_state("total", (30.00 as f64).to_hal_state())
+                        .add_state("currency", "USD".to_hal_state())
+                        .add_state("status", "shipped".to_hal_state())
+                )
+                .add_resource("ea:order",
+                    Resource::with_self("/orders/124")
+                        .add_link("ea:basket", Link::new("/baskets/97213"))
+                        .add_link("ea:customer", Link::new("/customers/12369"))
+                        .add_state("total", (20.00 as f64).to_hal_state())
+                        .add_state("currency", "USD".to_hal_state())
+                        .add_state("status", "processing".to_hal_state())
+                );    
 
-    router.get("/", index_handler);
-    router.get("/orders/:order_id", order_handler);
-    router.get("/setup", setup_handler);
+            let results = orders.to_json();
+            response
+                .content_type(mimes::Hal)
+                .send(format!("{}", results)); 
+        }
 
-    server.utilize(router);
+        get "/orders/:order_id" => |request, response| {
+            let conn = connect();
+
+            let order_id: i32 = match from_str(request.param("order_id")) {
+                Some(order_id) => order_id,
+                None => return Err(NickelError::new("Invalid order id", ErrorWithStatusCode(BadRequest)))
+            };
+
+            let stmt = conn.prepare("SELECT order_id, total, currency, status
+                                 FROM orders
+                                 WHERE order_id = $1").unwrap();
+
+            let mut rows = match stmt.query(&[&order_id]) {
+                Ok(rows) => rows,
+                Err(err) => panic!("error running query: {}", err)
+            };
+
+            let row = match rows.next() {
+                Some(row) => row,
+                None => return Err(NickelError::new("No such order", ErrorWithStatusCode(NotFound)))
+            };
+
+            let order = Order {
+                order_id: row.get(0),
+                total: row.get(1),
+                currency: row.get(2),
+                status: row.get(3)
+            };
+
+            let result = order.to_hal().to_json();
+            response
+                .content_type(mimes::Hal)
+                .send(format!("{}", result)); 
+
+            Ok(Halt)
+        }
+
+        get "/setup" => |request, response| {
+            let conn = connect();
+
+            conn.execute("DROP TABLE IF EXISTS orders", []).unwrap();
+
+            // todo: implement Numeric support
+            conn.execute("CREATE TABLE orders (
+                            order_id        SERIAL PRIMARY KEY,
+                            total           DOUBLE PRECISION NOT NULL,
+                            currency        VARCHAR NOT NULL,
+                            status          VARCHAR NOT NULL
+                         )", []).unwrap();
+
+            conn.execute("INSERT INTO orders (order_id, total, currency, status)
+                            VALUES ($1, $2, $3, $4)",
+                         &[&123i32,
+                           &20f64,
+                           &String::from_str("USD"),
+                           &String::from_str("processing")
+                          ]).unwrap();
+
+            conn.execute("INSERT INTO orders (order_id, total, currency, status)
+                            VALUES ($1, $2, $3, $4)",
+                         &[&124i32,
+                           &30f64,
+                           &String::from_str("USD"),
+                           &String::from_str("shipping")
+                          ]).unwrap();
+
+            response.send("Setup complete");
+        }
+    });
     server.handle_error(error_handler);
     server.listen(Ipv4Addr(127, 0, 0, 1), 6767);
 }
