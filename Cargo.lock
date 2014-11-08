@@ -57,7 +57,7 @@ source = "git+https://github.com/nickel-org/groupable-rs#66f2f53a6ac6850dbdddb8c
 [[package]]
 name = "hal-rs"
 version = "0.0.1"
-source = "git+https://github.com/hjr3/hal-rs.git#12965235dc032ebfd3d893915b35675bf5f52c85"
+source = "git+https://github.com/hjr3/hal-rs.git#55c07b10acec9ff1490d49f2546d8b8e9bc9fdb0"
 
 [[package]]
 name = "http"

@@ -11,7 +11,7 @@ extern crate time;
 use std::io::net::ip::Ipv4Addr;
 use nickel::{Nickel, Request, Response, HttpRouter, Continue, Halt, MiddlewareResult};
 use nickel::{NickelError, ErrorWithStatusCode, mimes};
-use hal::{Link, Resource, ToHalState, ToHal};
+use hal::{Link, Resource, ToHal};
 use serialize::json::ToJson;
 use postgres::{Connection, NoSsl};
 use std::os;
@@ -26,11 +26,11 @@ struct Order {
 }
 
 impl ToHal for Order {
-    fn to_hal(&self) -> Resource {
+    fn to_hal(self) -> Resource {
         Resource::with_self(format!("https://www.example.com/orders/{}", self.order_id).as_slice())
-            .add_state("total", self.total.to_hal_state())
-            .add_state("currency", self.currency.to_hal_state())
-            .add_state("status", self.status.to_hal_state())
+            .add_state("total", self.total)
+            .add_state("currency", self.currency)
+            .add_state("status", self.status)
     }
 }
 
@@ -54,7 +54,7 @@ fn connect() -> Connection {
 
 fn not_found_handler(message: String, response: &mut Response) {
     let error = Resource::new()
-        .add_state("message", message.to_hal_state())
+        .add_state("message", message)
         .add_link("help", Link::new("/help"));
 
     // todo: add vnd.error profile
@@ -66,7 +66,7 @@ fn not_found_handler(message: String, response: &mut Response) {
 
 fn bad_request_handler(message: String, response: &mut Response) {
     let error = Resource::new()
-        .add_state("message", message.to_hal_state())
+        .add_state("message", message)
         .add_link("help", Link::new("/help"));
 
     // todo: add vnd.error profile
@@ -113,23 +113,23 @@ fn main() {
                 .add_link("ea:find", Link::new("/orders{?id}").templated(true))
                 .add_link("ea:admin", Link::new("/admins/2").title("Fred"))
                 .add_link("ea:admin", Link::new("/admins/5").title("Kate"))
-                .add_state("currentlyProcessing", (14 as int).to_hal_state())
-                .add_state("shippedToday", (14 as int).to_hal_state())
+                .add_state("currentlyProcessing", (14 as int))
+                .add_state("shippedToday", (14 as int))
                 .add_resource("ea:order",
                     Resource::with_self("/orders/123")
                         .add_link("ea:basket", Link::new("/baskets/98712"))
                         .add_link("ea:customer", Link::new("/customers/7809"))
-                        .add_state("total", (30.00 as f64).to_hal_state())
-                        .add_state("currency", "USD".to_hal_state())
-                        .add_state("status", "shipped".to_hal_state())
+                        .add_state("total", (30.00 as f64))
+                        .add_state("currency", "USD")
+                        .add_state("status", "shipped")
                 )
                 .add_resource("ea:order",
                     Resource::with_self("/orders/124")
                         .add_link("ea:basket", Link::new("/baskets/97213"))
                         .add_link("ea:customer", Link::new("/customers/12369"))
-                        .add_state("total", (20.00 as f64).to_hal_state())
-                        .add_state("currency", "USD".to_hal_state())
-                        .add_state("status", "processing".to_hal_state())
+                        .add_state("total", (20.00 as f64))
+                        .add_state("currency", "USD")
+                        .add_state("status", "processing")
                 );    
 
             let results = orders.to_json();
