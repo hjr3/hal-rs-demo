@@ -3,6 +3,7 @@ extern crate nickel;
 extern crate hal;
 extern crate serialize;
 extern crate postgres;
+extern crate time;
 
 use std::io::net::ip::Ipv4Addr;
 use nickel::{Nickel, Request, Response, HttpRouter, Continue, Halt, MiddlewareResult};
@@ -88,6 +89,14 @@ fn error_handler(err: &NickelError, _request: &Request, response: &mut Response)
     }
 }
 
+fn logger(request: &Request, _response: &mut Response) -> MiddlewareResult {
+    let date_time = time::now();
+
+    println!("{} {}", date_time.rfc3339(), request.origin.request_uri);
+
+    Ok(Continue)
+}
+
 fn main() {
 
     fn index_handler (_request: &Request, response: &mut Response) { 
@@ -156,7 +165,6 @@ fn main() {
             .content_type(mimes::Hal)
             .send(format!("{}", result)); 
 
-        // todo: find out why i have to halt here
         Ok(Halt)
     }
 
@@ -193,6 +201,7 @@ fn main() {
     }
 
     let mut server = Nickel::new();
+    server.utilize(logger);
 
     let mut router = Nickel::router();
 
