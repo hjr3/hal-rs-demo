@@ -5,13 +5,17 @@ extern crate serialize;
 extern crate postgres;
 
 use std::io::net::ip::Ipv4Addr;
-use nickel::{ Nickel, Request, Response, HttpRouter };
-use hal::{ Link, Resource, ToHalState, ToHal };
+use nickel::{Nickel, Request, Response, HttpRouter, Continue, Halt, MiddlewareResult};
+use nickel::{NickelError, ErrorWithStatusCode, mimes};
+use hal::{Link, Resource, ToHalState, ToHal};
 use serialize::json::ToJson;
 use postgres::{Connection, NoSsl};
 use std::os;
+use http::status::NotFound;
+use http::status::BadRequest;
 
 struct Order {
+    order_id: i32,
     total: f64,
     currency: String,
     status: String
@@ -19,7 +23,7 @@ struct Order {
 
 impl ToHal for Order {
     fn to_hal(&self) -> Resource {
-        Resource::with_self("https://www.example.com/orders/1")
+        Resource::with_self(format!("https://www.example.com/orders/{}", self.order_id).as_slice())
             .add_state("total", self.total.to_hal_state())
             .add_state("currency", self.currency.to_hal_state())
             .add_state("status", self.status.to_hal_state())
@@ -44,8 +48,48 @@ fn connect() -> Connection {
     Connection::connect(dsn.as_slice(), &NoSsl).unwrap()
 }
 
+fn not_found_handler(message: String, response: &mut Response) {
+    let error = Resource::new()
+        .add_state("message", message.to_hal_state())
+        .add_link("help", Link::new("/help"));
+
+    // todo: add vnd.error profile
+    response
+        .status_code(NotFound)
+        .content_type(mimes::Hal)
+        .send(format!("{}", error.to_json())); 
+}
+
+fn bad_request_handler(message: String, response: &mut Response) {
+    let error = Resource::new()
+        .add_state("message", message.to_hal_state())
+        .add_link("help", Link::new("/help"));
+
+    // todo: add vnd.error profile
+    response
+        .status_code(BadRequest)
+        .content_type(mimes::Hal)
+        .send(format!("{}", error.to_json())); 
+}
+
+fn error_handler(err: &NickelError, _request: &Request, response: &mut Response) -> MiddlewareResult {
+    let message = err.message.to_string();
+
+    match err.kind {
+        ErrorWithStatusCode(BadRequest) => {
+            bad_request_handler(message, response);
+            Ok(Halt)
+        },
+        ErrorWithStatusCode(NotFound) => {
+            not_found_handler(message, response);
+            Ok(Halt)
+        },
+        _ => Ok(Continue)
+    }
+}
+
 fn main() {
-     
+
     fn index_handler (_request: &Request, response: &mut Response) { 
         let orders = Resource::with_self("/orders")
             .add_curie("ea", "http://example.com/docs/rels/{rel}")
@@ -74,37 +118,46 @@ fn main() {
 
         let results = orders.to_json();
         response
-            .content_type("json")
+            .content_type(mimes::Hal)
             .send(format!("{}", results)); 
     }
 
-    fn order_handler (request: &Request, response: &mut Response) { 
+    fn order_handler (request: &Request, response: &mut Response) -> MiddlewareResult { 
         let conn = connect();
 
-        let order_id: i32 = from_str(request.param("order_id")).unwrap();
+        let order_id: i32 = match from_str(request.param("order_id")) {
+            Some(order_id) => order_id,
+            None => return Err(NickelError::new("Invalid order id", ErrorWithStatusCode(BadRequest)))
+        };
 
-        let stmt = conn.prepare("SELECT total, currency, status
+        let stmt = conn.prepare("SELECT order_id, total, currency, status
                                  FROM orders
                                  WHERE order_id = $1").unwrap();
-
 
         let mut rows = match stmt.query(&[&order_id]) {
             Ok(rows) => rows,
             Err(err) => panic!("error running query: {}", err)
         };
 
-        let row = rows.next().unwrap();
+        let row = match rows.next() {
+            Some(row) => row,
+            None => return Err(NickelError::new("No such order", ErrorWithStatusCode(NotFound)))
+        };
 
         let order = Order {
-            total: row.get(0),
-            currency: row.get(1),
-            status: row.get(2)
+            order_id: row.get(0),
+            total: row.get(1),
+            currency: row.get(2),
+            status: row.get(3)
         };
 
         let result = order.to_hal().to_json();
         response
-            .content_type("json")
+            .content_type(mimes::Hal)
             .send(format!("{}", result)); 
+
+        // todo: find out why i have to halt here
+        Ok(Halt)
     }
 
     fn setup_handler (_request: &Request, response: &mut Response) { 
@@ -140,8 +193,14 @@ fn main() {
     }
 
     let mut server = Nickel::new();
-    server.get("/", index_handler);
-    server.get("/orders/:order_id", order_handler);
-    server.get("/setup", setup_handler);
+
+    let mut router = Nickel::router();
+
+    router.get("/", index_handler);
+    router.get("/orders/:order_id", order_handler);
+    router.get("/setup", setup_handler);
+
+    server.utilize(router);
+    server.handle_error(error_handler);
     server.listen(Ipv4Addr(127, 0, 0, 1), 6767);
 }

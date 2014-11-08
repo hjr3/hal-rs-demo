@@ -71,7 +71,7 @@ dependencies = [
 [[package]]
 name = "nickel"
 version = "0.1.0"
-source = "git+https://github.com/nickel-org/nickel.rs.git#e6e6fe3c1c7ad76876aee29a7c467be814fcc0a0"
+source = "git+https://github.com/nickel-org/nickel.rs.git#df9862f6b61df5aa36611ddaf22f649c3ff097d6"
 dependencies = [
  "anymap 0.9.0 (git+https://github.com/chris-morgan/anymap.git)",
  "groupable 0.1.0 (git+https://github.com/Ryman/groupable-rs)",
@@ -84,7 +84,7 @@ dependencies = [
 [[package]]
 name = "nickel_macros"
 version = "0.0.1"
-source = "git+https://github.com/nickel-org/nickel.rs.git#e6e6fe3c1c7ad76876aee29a7c467be814fcc0a0"
+source = "git+https://github.com/nickel-org/nickel.rs.git#df9862f6b61df5aa36611ddaf22f649c3ff097d6"
 
 [[package]]
 name = "openssl"
