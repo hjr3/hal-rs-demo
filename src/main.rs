@@ -12,11 +12,10 @@ use std::io::net::ip::Ipv4Addr;
 use nickel::{Nickel, Request, Response, HttpRouter, Continue, Halt, MiddlewareResult};
 use nickel::{NickelError, ErrorWithStatusCode, mimes};
 use hal::{Link, Resource, ToHal};
-use serialize::json::ToJson;
+use serialize::json::{ToJson, Json};
 use postgres::{Connection, NoSsl};
 use std::os;
-use http::status::NotFound;
-use http::status::BadRequest;
+use http::status::{NotFound, BadRequest};
 
 struct Order {
     order_id: i32,
@@ -146,9 +145,11 @@ fn main() {
                 None => return Err(NickelError::new("Invalid order id", ErrorWithStatusCode(BadRequest)))
             };
 
-            let stmt = conn.prepare("SELECT order_id, total, currency, status
-                                 FROM orders
-                                 WHERE order_id = $1").unwrap();
+            let stmt = conn.prepare("SELECT row_to_json(t)
+                                    FROM (SELECT order_id, total, currency, status
+                                          FROM orders
+                                          WHERE order_id = $1
+                                    ) AS t").unwrap();
 
             let mut rows = match stmt.query(&[&order_id]) {
                 Ok(rows) => rows,
@@ -160,17 +161,18 @@ fn main() {
                 None => return Err(NickelError::new("No such order", ErrorWithStatusCode(NotFound)))
             };
 
-            let order = Order {
-                order_id: row.get(0),
-                total: row.get(1),
-                currency: row.get(2),
-                status: row.get(3)
-            };
+            //let order = Order {
+            //    order_id: row.get(0),
+            //    total: row.get(1),
+            //    currency: row.get(2),
+            //    status: row.get(3)
+            //};
 
-            let result = order.to_hal().to_json();
+            //let result = order.to_hal().to_json();
+            let result: Json = row.get(0);
             response
                 .content_type(mimes::Hal)
-                .send(format!("{}", result)); 
+                .send(format!("{}", result));
 
             Ok(Halt)
         }
