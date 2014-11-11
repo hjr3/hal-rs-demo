@@ -13,7 +13,8 @@ use nickel::{Nickel, Request, Response, HttpRouter, Continue, Halt, MiddlewareRe
 use nickel::{NickelError, ErrorWithStatusCode, mimes};
 use hal::{Link, Resource, ToHal};
 use serialize::json::{ToJson, Json};
-use postgres::{Connection, NoSsl};
+use postgres::{Connection, NoSsl, Row, Rows, Statement, ToSql, ResultDescription};
+use postgres::types::{Type};
 use std::os;
 use http::status::{NotFound, BadRequest};
 
@@ -99,6 +100,35 @@ fn logger(request: &Request, _response: &mut Response) -> MiddlewareResult {
     Ok(Continue)
 }
 
+// todo: consider returning a Result<> instead of defaulting to Null
+fn pgsql_to_hal(descs: &[ResultDescription], row: &Row) -> Resource {
+    let mut hal = Resource::new();
+    for desc in descs.iter() {
+        let column_name = desc.name.as_slice();
+
+        match desc.ty {
+            Type::Varchar => {
+                let value: String = row.get(column_name);
+                hal = hal.add_state(column_name, value);
+            },
+            Type::Int4 => {
+                let value: i32 = row.get(column_name);
+                hal = hal.add_state(column_name, value as i64);
+            },
+            Type::Float8 => {
+                let value: f64 = row.get(column_name);
+                hal = hal.add_state(column_name, value);
+            },
+            _ => {
+                println!("type is: {}", desc.ty);
+                hal = hal.add_state(column_name, ());
+            }
+        }
+    }
+
+    hal
+}
+
 fn main() {
 
     let mut server = Nickel::new();
@@ -145,11 +175,15 @@ fn main() {
                 None => return Err(NickelError::new("Invalid order id", ErrorWithStatusCode(BadRequest)))
             };
 
-            let stmt = conn.prepare("SELECT row_to_json(t)
-                                    FROM (SELECT order_id, total, currency, status
-                                          FROM orders
-                                          WHERE order_id = $1
-                                    ) AS t").unwrap();
+            let stmt = conn.prepare("SELECT order_id, total, currency, status
+                                     FROM orders
+                                     WHERE order_id = $1").unwrap();
+
+            //let stmt = conn.prepare("SELECT row_to_json(t)
+            //                        FROM (SELECT order_id, total, currency, status
+            //                              FROM orders
+            //                              WHERE order_id = $1
+            //                        ) AS t").unwrap();
 
             let mut rows = match stmt.query(&[&order_id]) {
                 Ok(rows) => rows,
@@ -161,6 +195,40 @@ fn main() {
                 None => return Err(NickelError::new("No such order", ErrorWithStatusCode(NotFound)))
             };
 
+            let mut hal = pgsql_to_hal(stmt.result_descriptions(), &row);
+
+            //let mut hal = Resource::new();
+            //let descs = stmt.result_descriptions();
+            //for desc in descs.iter() {
+            //    println!("column name is {}", desc.name);
+
+            //    let column_name = desc.name.as_slice();
+            //    
+            //    // todo: figure out how to use get_type() here
+            //    match desc.ty {
+            //        Type::Varchar => {
+            //            let value: String = row.get(column_name);
+            //            hal = hal.add_state(column_name, value);
+            //        },
+            //        Type::Int4 => {
+            //            let value: i32 = row.get(column_name);
+            //            hal = hal.add_state(column_name, value as i64);
+            //        },
+            //        Type::Float8 => {
+            //            let value: f64 = row.get(column_name);
+            //            hal = hal.add_state(column_name, value);
+            //        },
+            //        _ => {
+            //            println!("type is: {}", desc.ty);
+            //            hal = hal.add_state(column_name, ());
+            //        }
+            //    }
+            //}
+
+            let order_id: i32 = row.get(0);
+            hal = hal.add_link("self", Link::new(format!("https://www.example.com/orders/{}", order_id).as_slice()));
+            let result = hal.to_json();
+
             //let order = Order {
             //    order_id: row.get(0),
             //    total: row.get(1),
@@ -169,7 +237,10 @@ fn main() {
             //};
 
             //let result = order.to_hal().to_json();
-            let result: Json = row.get(0);
+            //let result: Json = row.get(0);
+            //let order = Resource::from_json(result)
+            //    .add_link("self", Link::new(format!("https://www.example.com/orders/{}", order_id).as_slice()));
+
             response
                 .content_type(mimes::Hal)
                 .send(format!("{}", result));
