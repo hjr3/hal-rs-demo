@@ -9,14 +9,10 @@ authors = [ "Herman J. Radtke III <herman@hermanradtke.com>" ]
 name = "hal-demo"
 path = "src/main.rs"
 
-[dependencies.nickel]
-
-git = "https://github.com/nickel-org/nickel.rs.git"
-
-[dependencies.hal-rs]
-
-git = "https://github.com/hjr3/hal-rs.git"
-
-[dependencies.postgres]
-
-git = "https://github.com/sfackler/rust-postgres.git"
+[dependencies]
+hal = "*"
+nickel = "*"
+nickel_macros = "*"
+postgres = "*"
+rustc-serialize = "*"
+time = "*"
